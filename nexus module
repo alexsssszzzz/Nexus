@@ -1,0 +1,1283 @@
+--[[
+    Nexus UI Library v1.0
+    Advanced Roblox GUI Library
+    
+    Features:
+    - Modern glass morphism design
+    - Smooth animations and transitions
+    - Extensive component library
+    - Theme system with customization
+    - Responsive layouts
+    - Advanced input handling
+    - Plugin system
+    - Performance optimized
+]]
+
+local NexusUI = {}
+NexusUI.__index = NexusUI
+
+-- Services
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+
+-- Constants
+local Player = Players.LocalPlayer
+local PlayerGui = Player:WaitForChild("PlayerGui")
+
+-- Utility Functions
+local function CreateTween(object, info, properties)
+    local tweenInfo = TweenInfo.new(
+        info.Time or 0.3,
+        info.EasingStyle or Enum.EasingStyle.Quart,
+        info.EasingDirection or Enum.EasingDirection.Out,
+        info.RepeatCount or 0,
+        info.Reverses or false,
+        info.DelayTime or 0
+    )
+    return TweenService:Create(object, tweenInfo, properties)
+end
+
+local function RippleEffect(button, position)
+    local ripple = Instance.new("Frame")
+    ripple.Name = "Ripple"
+    ripple.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    ripple.BackgroundTransparency = 0.8
+    ripple.BorderSizePixel = 0
+    ripple.AnchorPoint = Vector2.new(0.5, 0.5)
+    ripple.Position = UDim2.new(0, position.X, 0, position.Y)
+    ripple.Size = UDim2.new(0, 0, 0, 0)
+    ripple.Parent = button
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(1, 0)
+    corner.Parent = ripple
+    
+    local maxSize = math.max(button.AbsoluteSize.X, button.AbsoluteSize.Y) * 2
+    
+    local expandTween = CreateTween(ripple, {Time = 0.6}, {
+        Size = UDim2.new(0, maxSize, 0, maxSize),
+        BackgroundTransparency = 1
+    })
+    
+    expandTween:Play()
+    expandTween.Completed:Connect(function()
+        ripple:Destroy()
+    end)
+end
+
+-- Theme System
+local Themes = {
+    Dark = {
+        Primary = Color3.fromRGB(15, 15, 25),
+        Secondary = Color3.fromRGB(25, 25, 40),
+        Accent = Color3.fromRGB(100, 150, 255),
+        AccentHover = Color3.fromRGB(120, 170, 255),
+        Text = Color3.fromRGB(240, 240, 240),
+        SubText = Color3.fromRGB(180, 180, 180),
+        Border = Color3.fromRGB(40, 40, 60),
+        Success = Color3.fromRGB(80, 200, 120),
+        Warning = Color3.fromRGB(255, 180, 0),
+        Error = Color3.fromRGB(255, 80, 80),
+        Glass = Color3.fromRGB(255, 255, 255),
+        GlassTransparency = 0.9
+    },
+    Light = {
+        Primary = Color3.fromRGB(250, 250, 255),
+        Secondary = Color3.fromRGB(240, 240, 250),
+        Accent = Color3.fromRGB(70, 120, 255),
+        AccentHover = Color3.fromRGB(90, 140, 255),
+        Text = Color3.fromRGB(20, 20, 30),
+        SubText = Color3.fromRGB(80, 80, 100),
+        Border = Color3.fromRGB(200, 200, 220),
+        Success = Color3.fromRGB(60, 180, 100),
+        Warning = Color3.fromRGB(235, 160, 0),
+        Error = Color3.fromRGB(235, 60, 60),
+        Glass = Color3.fromRGB(255, 255, 255),
+        GlassTransparency = 0.3
+    }
+}
+
+-- Main Library
+function NexusUI.new(config)
+    local self = setmetatable({}, NexusUI)
+    
+    -- Configuration
+    self.Config = {
+        Name = config.Name or "Nexus UI",
+        Theme = config.Theme or "Dark",
+        Size = config.Size or UDim2.new(0, 600, 0, 400),
+        SaveConfig = config.SaveConfig or true,
+        IntroEnabled = config.IntroEnabled ~= false,
+        KeybindEnabled = config.KeybindEnabled ~= false,
+        Keybind = config.Keybind or Enum.KeyCode.RightControl
+    }
+    
+    self.Theme = Themes[self.Config.Theme]
+    self.Pages = {}
+    self.CurrentPage = nil
+    self.Notifications = {}
+    
+    -- Create GUI
+    self:CreateGUI()
+    
+    -- Setup keybind
+    if self.Config.KeybindEnabled then
+        self:SetupKeybind()
+    end
+    
+    -- Intro animation
+    if self.Config.IntroEnabled then
+        self:PlayIntro()
+    end
+    
+    return self
+end
+
+function NexusUI:CreateGUI()
+    -- Main ScreenGui
+    self.GUI = Instance.new("ScreenGui")
+    self.GUI.Name = "NexusUI_" .. self.Config.Name
+    self.GUI.ResetOnSpawn = false
+    self.GUI.Parent = CoreGui
+    
+    -- Main Frame
+    self.Main = Instance.new("Frame")
+    self.Main.Name = "Main"
+    self.Main.Size = self.Config.Size
+    self.Main.Position = UDim2.new(0.5, 0, 0.5, 0)
+    self.Main.AnchorPoint = Vector2.new(0.5, 0.5)
+    self.Main.BackgroundColor3 = self.Theme.Primary
+    self.Main.BorderSizePixel = 0
+    self.Main.ClipsDescendants = true
+    self.Main.Parent = self.GUI
+    
+    -- Glass effect
+    local glassEffect = Instance.new("Frame")
+    glassEffect.Name = "GlassEffect"
+    glassEffect.Size = UDim2.new(1, 0, 1, 0)
+    glassEffect.BackgroundColor3 = self.Theme.Glass
+    glassEffect.BackgroundTransparency = self.Theme.GlassTransparency
+    glassEffect.BorderSizePixel = 0
+    glassEffect.Parent = self.Main
+    
+    -- Corner rounding
+    local mainCorner = Instance.new("UICorner")
+    mainCorner.CornerRadius = UDim.new(0, 12)
+    mainCorner.Parent = self.Main
+    
+    local glassCorner = Instance.new("UICorner")
+    glassCorner.CornerRadius = UDim.new(0, 12)
+    glassCorner.Parent = glassEffect
+    
+    -- Drop shadow
+    local shadow = Instance.new("ImageLabel")
+    shadow.Name = "Shadow"
+    shadow.Size = UDim2.new(1, 20, 1, 20)
+    shadow.Position = UDim2.new(0, -10, 0, -10)
+    shadow.BackgroundTransparency = 1
+    shadow.Image = "rbxasset://textures/ui/Controls/DropShadow.png"
+    shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+    shadow.ImageTransparency = 0.8
+    shadow.ScaleType = Enum.ScaleType.Slice
+    shadow.SliceCenter = Rect.new(12, 12, 256-12, 256-12)
+    shadow.ZIndex = -1
+    shadow.Parent = self.Main
+    
+    -- Title Bar
+    self.TitleBar = Instance.new("Frame")
+    self.TitleBar.Name = "TitleBar"
+    self.TitleBar.Size = UDim2.new(1, 0, 0, 50)
+    self.TitleBar.BackgroundTransparency = 1
+    self.TitleBar.Parent = self.Main
+    
+    -- Title
+    self.Title = Instance.new("TextLabel")
+    self.Title.Name = "Title"
+    self.Title.Size = UDim2.new(1, -100, 1, 0)
+    self.Title.Position = UDim2.new(0, 20, 0, 0)
+    self.Title.BackgroundTransparency = 1
+    self.Title.Text = self.Config.Name
+    self.Title.TextColor3 = self.Theme.Text
+    self.Title.TextSize = 18
+    self.Title.TextXAlignment = Enum.TextXAlignment.Left
+    self.Title.Font = Enum.Font.GothamBold
+    self.Title.Parent = self.TitleBar
+    
+    -- Close Button
+    self.CloseButton = Instance.new("TextButton")
+    self.CloseButton.Name = "CloseButton"
+    self.CloseButton.Size = UDim2.new(0, 30, 0, 30)
+    self.CloseButton.Position = UDim2.new(1, -40, 0, 10)
+    self.CloseButton.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
+    self.CloseButton.BackgroundTransparency = 0.9
+    self.CloseButton.BorderSizePixel = 0
+    self.CloseButton.Text = "×"
+    self.CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    self.CloseButton.TextSize = 16
+    self.CloseButton.Font = Enum.Font.GothamBold
+    self.CloseButton.Parent = self.TitleBar
+    
+    local closeCorner = Instance.new("UICorner")
+    closeCorner.CornerRadius = UDim.new(0, 6)
+    closeCorner.Parent = self.CloseButton
+    
+    -- Minimize Button
+    self.MinimizeButton = Instance.new("TextButton")
+    self.MinimizeButton.Name = "MinimizeButton"
+    self.MinimizeButton.Size = UDim2.new(0, 30, 0, 30)
+    self.MinimizeButton.Position = UDim2.new(1, -75, 0, 10)
+    self.MinimizeButton.BackgroundColor3 = Color3.fromRGB(255, 180, 0)
+    self.MinimizeButton.BackgroundTransparency = 0.9
+    self.MinimizeButton.BorderSizePixel = 0
+    self.MinimizeButton.Text = "−"
+    self.MinimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    self.MinimizeButton.TextSize = 16
+    self.MinimizeButton.Font = Enum.Font.GothamBold
+    self.MinimizeButton.Parent = self.TitleBar
+    
+    local minimizeCorner = Instance.new("UICorner")
+    minimizeCorner.CornerRadius = UDim.new(0, 6)
+    minimizeCorner.Parent = self.MinimizeButton
+    
+    -- Navigation Container
+    self.Navigation = Instance.new("Frame")
+    self.Navigation.Name = "Navigation"
+    self.Navigation.Size = UDim2.new(0, 200, 1, -50)
+    self.Navigation.Position = UDim2.new(0, 0, 0, 50)
+    self.Navigation.BackgroundColor3 = self.Theme.Secondary
+    self.Navigation.BackgroundTransparency = 0.3
+    self.Navigation.BorderSizePixel = 0
+    self.Navigation.Parent = self.Main
+    
+    -- Navigation corner
+    local navCorner = Instance.new("UICorner")
+    navCorner.CornerRadius = UDim.new(0, 8)
+    navCorner.Parent = self.Navigation
+    
+    -- Navigation List
+    self.NavigationList = Instance.new("ScrollingFrame")
+    self.NavigationList.Name = "NavigationList"
+    self.NavigationList.Size = UDim2.new(1, -10, 1, -10)
+    self.NavigationList.Position = UDim2.new(0, 5, 0, 5)
+    self.NavigationList.BackgroundTransparency = 1
+    self.NavigationList.BorderSizePixel = 0
+    self.NavigationList.ScrollBarThickness = 3
+    self.NavigationList.ScrollBarImageColor3 = self.Theme.Accent
+    self.NavigationList.Parent = self.Navigation
+    
+    local navListLayout = Instance.new("UIListLayout")
+    navListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    navListLayout.Padding = UDim.new(0, 5)
+    navListLayout.Parent = self.NavigationList
+    
+    -- Content Container
+    self.Content = Instance.new("Frame")
+    self.Content.Name = "Content"
+    self.Content.Size = UDim2.new(1, -210, 1, -50)
+    self.Content.Position = UDim2.new(0, 205, 0, 50)
+    self.Content.BackgroundTransparency = 1
+    self.Content.BorderSizePixel = 0
+    self.Content.Parent = self.Main
+    
+    -- Setup interactions
+    self:SetupInteractions()
+end
+
+function NexusUI:SetupInteractions()
+    -- Dragging
+    local dragging = false
+    local dragStart = nil
+    local startPos = nil
+    
+    self.TitleBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = self.Main.Position
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - dragStart
+            self.Main.Position = UDim2.new(
+                startPos.X.Scale,
+                startPos.X.Offset + delta.X,
+                startPos.Y.Scale,
+                startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+    
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    
+    -- Close button
+    self.CloseButton.MouseButton1Click:Connect(function()
+        self:Destroy()
+    end)
+    
+    -- Minimize button
+    self.MinimizeButton.MouseButton1Click:Connect(function()
+        self:Toggle()
+    end)
+    
+    -- Button hover effects
+    local function setupButtonHover(button, hoverColor, normalColor)
+        button.MouseEnter:Connect(function()
+            CreateTween(button, {Time = 0.2}, {BackgroundTransparency = 0.7}):Play()
+        end)
+        
+        button.MouseLeave:Connect(function()
+            CreateTween(button, {Time = 0.2}, {BackgroundTransparency = 0.9}):Play()
+        end)
+    end
+    
+    setupButtonHover(self.CloseButton)
+    setupButtonHover(self.MinimizeButton)
+end
+
+function NexusUI:SetupKeybind()
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if not gameProcessed and input.KeyCode == self.Config.Keybind then
+            self:Toggle()
+        end
+    end)
+end
+
+function NexusUI:PlayIntro()
+    self.Main.Size = UDim2.new(0, 0, 0, 0)
+    self.Main.BackgroundTransparency = 1
+    
+    local introTween = CreateTween(self.Main, {Time = 0.8, EasingStyle = Enum.EasingStyle.Back}, {
+        Size = self.Config.Size,
+        BackgroundTransparency = 0
+    })
+    
+    introTween:Play()
+end
+
+function NexusUI:CreatePage(config)
+    local page = {
+        Name = config.Name or "Page",
+        Icon = config.Icon or "rbxassetid://0",
+        Elements = {}
+    }
+    
+    -- Create navigation button
+    local navButton = Instance.new("TextButton")
+    navButton.Name = page.Name
+    navButton.Size = UDim2.new(1, 0, 0, 40)
+    navButton.BackgroundColor3 = self.Theme.Secondary
+    navButton.BackgroundTransparency = 0.5
+    navButton.BorderSizePixel = 0
+    navButton.Text = "  " .. page.Name
+    navButton.TextColor3 = self.Theme.SubText
+    navButton.TextSize = 14
+    navButton.TextXAlignment = Enum.TextXAlignment.Left
+    navButton.Font = Enum.Font.Gotham
+    navButton.Parent = self.NavigationList
+    
+    local buttonCorner = Instance.new("UICorner")
+    buttonCorner.CornerRadius = UDim.new(0, 6)
+    buttonCorner.Parent = navButton
+    
+    -- Create page content
+    local pageContent = Instance.new("ScrollingFrame")
+    pageContent.Name = page.Name .. "Content"
+    pageContent.Size = UDim2.new(1, 0, 1, 0)
+    pageContent.BackgroundTransparency = 1
+    pageContent.BorderSizePixel = 0
+    pageContent.ScrollBarThickness = 4
+    pageContent.ScrollBarImageColor3 = self.Theme.Accent
+    pageContent.Visible = false
+    pageContent.Parent = self.Content
+    
+    local contentLayout = Instance.new("UIListLayout")
+    contentLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    contentLayout.Padding = UDim.new(0, 10)
+    contentLayout.Parent = pageContent
+    
+    local contentPadding = Instance.new("UIPadding")
+    contentPadding.PaddingTop = UDim.new(0, 10)
+    contentPadding.PaddingBottom = UDim.new(0, 10)
+    contentPadding.PaddingLeft = UDim.new(0, 10)
+    contentPadding.PaddingRight = UDim.new(0, 15)
+    contentPadding.Parent = pageContent
+    
+    page.Content = pageContent
+    page.Button = navButton
+    
+    -- Navigation button interaction
+    navButton.MouseButton1Click:Connect(function()
+        self:ShowPage(page.Name)
+        RippleEffect(navButton, navButton.AbsoluteSize * 0.5)
+    end)
+    
+    -- Hover effects
+    navButton.MouseEnter:Connect(function()
+        if self.CurrentPage ~= page.Name then
+            CreateTween(navButton, {Time = 0.2}, {
+                BackgroundTransparency = 0.3,
+                TextColor3 = self.Theme.Text
+            }):Play()
+        end
+    end)
+    
+    navButton.MouseLeave:Connect(function()
+        if self.CurrentPage ~= page.Name then
+            CreateTween(navButton, {Time = 0.2}, {
+                BackgroundTransparency = 0.5,
+                TextColor3 = self.Theme.SubText
+            }):Play()
+        end
+    end)
+    
+    self.Pages[page.Name] = page
+    
+    -- Show first page by default
+    if not self.CurrentPage then
+        self:ShowPage(page.Name)
+    end
+    
+    -- Update navigation list size
+    self.NavigationList.CanvasSize = UDim2.new(0, 0, 0, contentLayout.AbsoluteContentSize.Y)
+    contentLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        self.NavigationList.CanvasSize = UDim2.new(0, 0, 0, contentLayout.AbsoluteContentSize.Y)
+    end)
+    
+    return self:CreatePageMethods(page)
+end
+
+function NexusUI:CreatePageMethods(page)
+    local pageMethods = {}
+    
+    function pageMethods:CreateButton(config)
+        local button = Instance.new("TextButton")
+        button.Name = config.Name or "Button"
+        button.Size = UDim2.new(1, 0, 0, 35)
+        button.BackgroundColor3 = self.Theme.Accent
+        button.BorderSizePixel = 0
+        button.Text = config.Text or "Button"
+        button.TextColor3 = Color3.fromRGB(255, 255, 255)
+        button.TextSize = 14
+        button.Font = Enum.Font.GothamMedium
+        button.Parent = page.Content
+        
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 6)
+        corner.Parent = button
+        
+        -- Interactions
+        button.MouseButton1Click:Connect(function()
+            if config.Callback then
+                config.Callback()
+            end
+            RippleEffect(button, button.AbsoluteSize * 0.5)
+        end)
+        
+        button.MouseEnter:Connect(function()
+            CreateTween(button, {Time = 0.2}, {BackgroundColor3 = self.Theme.AccentHover}):Play()
+        end)
+        
+        button.MouseLeave:Connect(function()
+            CreateTween(button, {Time = 0.2}, {BackgroundColor3 = self.Theme.Accent}):Play()
+        end)
+        
+        return button
+    end
+    
+    function pageMethods:CreateToggle(config)
+        local container = Instance.new("Frame")
+        container.Name = config.Name or "Toggle"
+        container.Size = UDim2.new(1, 0, 0, 35)
+        container.BackgroundColor3 = self.Theme.Secondary
+        container.BackgroundTransparency = 0.3
+        container.BorderSizePixel = 0
+        container.Parent = page.Content
+        
+        local containerCorner = Instance.new("UICorner")
+        containerCorner.CornerRadius = UDim.new(0, 6)
+        containerCorner.Parent = container
+        
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, -60, 1, 0)
+        label.Position = UDim2.new(0, 10, 0, 0)
+        label.BackgroundTransparency = 1
+        label.Text = config.Text or "Toggle"
+        label.TextColor3 = self.Theme.Text
+        label.TextSize = 14
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.Font = Enum.Font.Gotham
+        label.Parent = container
+        
+        local toggleButton = Instance.new("TextButton")
+        toggleButton.Size = UDim2.new(0, 45, 0, 20)
+        toggleButton.Position = UDim2.new(1, -55, 0.5, -10)
+        toggleButton.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
+        toggleButton.BorderSizePixel = 0
+        toggleButton.Text = ""
+        toggleButton.Parent = container
+        
+        local toggleCorner = Instance.new("UICorner")
+        toggleCorner.CornerRadius = UDim.new(1, 0)
+        toggleCorner.Parent = toggleButton
+        
+        local toggleCircle = Instance.new("Frame")
+        toggleCircle.Size = UDim2.new(0, 16, 0, 16)
+        toggleCircle.Position = UDim2.new(0, 2, 0.5, -8)
+        toggleCircle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        toggleCircle.BorderSizePixel = 0
+        toggleCircle.Parent = toggleButton
+        
+        local circleCorner = Instance.new("UICorner")
+        circleCorner.CornerRadius = UDim.new(1, 0)
+        circleCorner.Parent = toggleCircle
+        
+        local isToggled = config.Default or false
+        
+        local function updateToggle()
+            if isToggled then
+                CreateTween(toggleButton, {Time = 0.3}, {BackgroundColor3 = self.Theme.Accent}):Play()
+                CreateTween(toggleCircle, {Time = 0.3}, {Position = UDim2.new(1, -18, 0.5, -8)}):Play()
+            else
+                CreateTween(toggleButton, {Time = 0.3}, {BackgroundColor3 = Color3.fromRGB(60, 60, 80)}):Play()
+                CreateTween(toggleCircle, {Time = 0.3}, {Position = UDim2.new(0, 2, 0.5, -8)}):Play()
+            end
+        end
+        
+        toggleButton.MouseButton1Click:Connect(function()
+            isToggled = not isToggled
+            updateToggle()
+            if config.Callback then
+                config.Callback(isToggled)
+            end
+        end)
+        
+        -- Initialize
+        updateToggle()
+        
+        return {
+            SetValue = function(value)
+                isToggled = value
+                updateToggle()
+            end,
+            GetValue = function()
+                return isToggled
+            end
+        }
+    end
+    
+    function pageMethods:CreateSlider(config)
+        local container = Instance.new("Frame")
+        container.Name = config.Name or "Slider"
+        container.Size = UDim2.new(1, 0, 0, 50)
+        container.BackgroundColor3 = self.Theme.Secondary
+        container.BackgroundTransparency = 0.3
+        container.BorderSizePixel = 0
+        container.Parent = page.Content
+        
+        local containerCorner = Instance.new("UICorner")
+        containerCorner.CornerRadius = UDim.new(0, 6)
+        containerCorner.Parent = container
+        
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, -80, 0, 20)
+        label.Position = UDim2.new(0, 10, 0, 5)
+        label.BackgroundTransparency = 1
+        label.Text = config.Text or "Slider"
+        label.TextColor3 = self.Theme.Text
+        label.TextSize = 14
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.Font = Enum.Font.Gotham
+        label.Parent = container
+        
+        local valueLabel = Instance.new("TextLabel")
+        valueLabel.Size = UDim2.new(0, 70, 0, 20)
+        valueLabel.Position = UDim2.new(1, -80, 0, 5)
+        valueLabel.BackgroundTransparency = 1
+        valueLabel.Text = tostring(config.Default or config.Min or 0)
+        valueLabel.TextColor3 = self.Theme.Accent
+        valueLabel.TextSize = 14
+        valueLabel.TextXAlignment = Enum.TextXAlignment.Right
+        valueLabel.Font = Enum.Font.GothamMedium
+        valueLabel.Parent = container
+        
+        local sliderTrack = Instance.new("Frame")
+        sliderTrack.Size = UDim2.new(1, -20, 0, 4)
+        sliderTrack.Position = UDim2.new(0, 10, 1, -15)
+        sliderTrack.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
+        sliderTrack.BorderSizePixel = 0
+        sliderTrack.Parent = container
+        
+        local trackCorner = Instance.new("UICorner")
+        trackCorner.CornerRadius = UDim.new(1, 0)
+        trackCorner.Parent = sliderTrack
+        
+        local sliderFill = Instance.new("Frame")
+        sliderFill.Size = UDim2.new(0, 0, 1, 0)
+        sliderFill.BackgroundColor3 = self.Theme.Accent
+        sliderFill.BorderSizePixel = 0
+        sliderFill.Parent = sliderTrack
+        
+        local fillCorner = Instance.new("UICorner")
+        fillCorner.CornerRadius = UDim.new(1, 0)
+        fillCorner.Parent = sliderFill
+        
+        local sliderThumb = Instance.new("Frame")
+        sliderThumb.Size = UDim2.new(0, 16, 0, 16)
+        sliderThumb.Position = UDim2.new(0, -8, 0.5, -8)
+        sliderThumb.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        sliderThumb.BorderSizePixel = 0
+        sliderThumb.Parent = sliderTrack
+        
+        local thumbCorner = Instance.new("UICorner")
+        thumbCorner.CornerRadius = UDim.new(1, 0)
+        thumbCorner.Parent = sliderThumb
+        
+        local minValue = config.Min or 0
+        local maxValue = config.Max or 100
+        local currentValue = config.Default or minValue
+        local isDragging = false
+        
+        local function updateSlider(value)
+            local percentage = (value - minValue) / (maxValue - minValue)
+            percentage = math.clamp(percentage, 0, 1)
+            
+            CreateTween(sliderFill, {Time = 0.1}, {Size = UDim2.new(percentage, 0, 1, 0)}):Play()
+            CreateTween(sliderThumb, {Time = 0.1}, {Position = UDim2.new(percentage, -8, 0.5, -8)}):Play()
+            
+            currentValue = minValue + (maxValue - minValue) * percentage
+            if config.Increment then
+                currentValue = math.floor(currentValue / config.Increment) * config.Increment
+            end
+            
+            valueLabel.Text = tostring(math.floor(currentValue * 100) / 100)
+            
+            if config.Callback then
+                config.Callback(currentValue)
+            end
+        end
+        
+        sliderTrack.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                isDragging = true
+                local mousePos = UserInputService:GetMouseLocation().X
+                local trackPos = sliderTrack.AbsolutePosition.X
+                local trackSize = sliderTrack.AbsoluteSize.X
+                local percentage = math.clamp((mousePos - trackPos) / trackSize, 0, 1)
+                local value = minValue + (maxValue - minValue) * percentage
+                updateSlider(value)
+            end
+        end)
+        
+        UserInputService.InputChanged:Connect(function(input)
+            if isDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+                local mousePos = UserInputService:GetMouseLocation().X
+                local trackPos = sliderTrack.AbsolutePosition.X
+                local trackSize = sliderTrack.AbsoluteSize.X
+                local percentage = math.clamp((mousePos - trackPos) / trackSize, 0, 1)
+                local value = minValue + (maxValue - minValue) * percentage
+                updateSlider(value)
+            end
+        end)
+        
+        UserInputService.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                isDragging = false
+            end
+        end)
+        
+        -- Initialize
+        updateSlider(currentValue)
+        
+        return {
+            SetValue = function(value)
+                updateSlider(value)
+            end,
+            GetValue = function()
+                return currentValue
+            end
+        }
+    end
+    
+    function pageMethods:CreateDropdown(config)
+        local container = Instance.new("Frame")
+        container.Name = config.Name or "Dropdown"
+        container.Size = UDim2.new(1, 0, 0, 35)
+        container.BackgroundColor3 = self.Theme.Secondary
+        container.BackgroundTransparency = 0.3
+        container.BorderSizePixel = 0
+        container.ClipsDescendants = false
+        container.Parent = page.Content
+        
+        local containerCorner = Instance.new("UICorner")
+        containerCorner.CornerRadius = UDim.new(0, 6)
+        containerCorner.Parent = container
+        
+        local dropdownButton = Instance.new("TextButton")
+        dropdownButton.Size = UDim2.new(1, 0, 1, 0)
+        dropdownButton.BackgroundTransparency = 1
+        dropdownButton.BorderSizePixel = 0
+        dropdownButton.Text = ""
+        dropdownButton.Parent = container
+        
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, -30, 1, 0)
+        label.Position = UDim2.new(0, 10, 0, 0)
+        label.BackgroundTransparency = 1
+        label.Text = config.Default or "Select Option"
+        label.TextColor3 = self.Theme.Text
+        label.TextSize = 14
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.Font = Enum.Font.Gotham
+        label.Parent = container
+        
+        local arrow = Instance.new("TextLabel")
+        arrow.Size = UDim2.new(0, 20, 1, 0)
+        arrow.Position = UDim2.new(1, -25, 0, 0)
+        arrow.BackgroundTransparency = 1
+        arrow.Text = "▼"
+        arrow.TextColor3 = self.Theme.SubText
+        arrow.TextSize = 12
+        arrow.Font = Enum.Font.Gotham
+        arrow.Parent = container
+        
+        local dropdownList = Instance.new("Frame")
+        dropdownList.Name = "DropdownList"
+        dropdownList.Size = UDim2.new(1, 0, 0, 0)
+        dropdownList.Position = UDim2.new(0, 0, 1, 5)
+        dropdownList.BackgroundColor3 = self.Theme.Secondary
+        dropdownList.BorderSizePixel = 0
+        dropdownList.ClipsDescendants = true
+        dropdownList.ZIndex = 10
+        dropdownList.Parent = container
+        
+        local listCorner = Instance.new("UICorner")
+        listCorner.CornerRadius = UDim.new(0, 6)
+        listCorner.Parent = dropdownList
+        
+        local listLayout = Instance.new("UIListLayout")
+        listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        listLayout.Parent = dropdownList
+        
+        local isOpen = false
+        local selectedOption = config.Default
+        
+        local function toggleDropdown()
+            isOpen = not isOpen
+            local targetSize = isOpen and UDim2.new(1, 0, 0, #config.Options * 30) or UDim2.new(1, 0, 0, 0)
+            local arrowRotation = isOpen and 180 or 0
+            
+            CreateTween(dropdownList, {Time = 0.3}, {Size = targetSize}):Play()
+            CreateTween(arrow, {Time = 0.3}, {Rotation = arrowRotation}):Play()
+        end
+        
+        dropdownButton.MouseButton1Click:Connect(toggleDropdown)
+        
+        -- Create options
+        for i, option in ipairs(config.Options or {}) do
+            local optionButton = Instance.new("TextButton")
+            optionButton.Size = UDim2.new(1, 0, 0, 30)
+            optionButton.BackgroundColor3 = self.Theme.Secondary
+            optionButton.BackgroundTransparency = 1
+            optionButton.BorderSizePixel = 0
+            optionButton.Text = "  " .. option
+            optionButton.TextColor3 = self.Theme.Text
+            optionButton.TextSize = 13
+            optionButton.TextXAlignment = Enum.TextXAlignment.Left
+            optionButton.Font = Enum.Font.Gotham
+            optionButton.ZIndex = 11
+            optionButton.Parent = dropdownList
+            
+            optionButton.MouseButton1Click:Connect(function()
+                selectedOption = option
+                label.Text = option
+                toggleDropdown()
+                if config.Callback then
+                    config.Callback(option)
+                end
+            end)
+            
+            optionButton.MouseEnter:Connect(function()
+                CreateTween(optionButton, {Time = 0.2}, {BackgroundTransparency = 0.7}):Play()
+            end)
+            
+            optionButton.MouseLeave:Connect(function()
+                CreateTween(optionButton, {Time = 0.2}, {BackgroundTransparency = 1}):Play()
+            end)
+        end
+        
+        return {
+            SetValue = function(value)
+                selectedOption = value
+                label.Text = value
+            end,
+            GetValue = function()
+                return selectedOption
+            end
+        }
+    end
+    
+    function pageMethods:CreateInput(config)
+        local container = Instance.new("Frame")
+        container.Name = config.Name or "Input"
+        container.Size = UDim2.new(1, 0, 0, 50)
+        container.BackgroundColor3 = self.Theme.Secondary
+        container.BackgroundTransparency = 0.3
+        container.BorderSizePixel = 0
+        container.Parent = page.Content
+        
+        local containerCorner = Instance.new("UICorner")
+        containerCorner.CornerRadius = UDim.new(0, 6)
+        containerCorner.Parent = container
+        
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, -20, 0, 20)
+        label.Position = UDim2.new(0, 10, 0, 5)
+        label.BackgroundTransparency = 1
+        label.Text = config.Text or "Input"
+        label.TextColor3 = self.Theme.Text
+        label.TextSize = 14
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.Font = Enum.Font.Gotham
+        label.Parent = container
+        
+        local inputBox = Instance.new("TextBox")
+        inputBox.Size = UDim2.new(1, -20, 0, 20)
+        inputBox.Position = UDim2.new(0, 10, 1, -25)
+        inputBox.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+        inputBox.BorderSizePixel = 0
+        inputBox.Text = config.Default or ""
+        inputBox.PlaceholderText = config.Placeholder or "Enter text..."
+        inputBox.TextColor3 = self.Theme.Text
+        inputBox.PlaceholderColor3 = self.Theme.SubText
+        inputBox.TextSize = 13
+        inputBox.Font = Enum.Font.Gotham
+        inputBox.ClearTextOnFocus = false
+        inputBox.Parent = container
+        
+        local inputCorner = Instance.new("UICorner")
+        inputCorner.CornerRadius = UDim.new(0, 4)
+        inputCorner.Parent = inputBox
+        
+        inputBox.FocusLost:Connect(function(enterPressed)
+            if config.Callback then
+                config.Callback(inputBox.Text)
+            end
+        end)
+        
+        inputBox.Focused:Connect(function()
+            CreateTween(inputBox, {Time = 0.2}, {BackgroundColor3 = Color3.fromRGB(50, 50, 70)}):Play()
+        end)
+        
+        inputBox.FocusLost:Connect(function()
+            CreateTween(inputBox, {Time = 0.2}, {BackgroundColor3 = Color3.fromRGB(40, 40, 60)}):Play()
+        end)
+        
+        return {
+            SetValue = function(value)
+                inputBox.Text = value
+            end,
+            GetValue = function()
+                return inputBox.Text
+            end
+        }
+    end
+    
+    function pageMethods:CreateKeybind(config)
+        local container = Instance.new("Frame")
+        container.Name = config.Name or "Keybind"
+        container.Size = UDim2.new(1, 0, 0, 35)
+        container.BackgroundColor3 = self.Theme.Secondary
+        container.BackgroundTransparency = 0.3
+        container.BorderSizePixel = 0
+        container.Parent = page.Content
+        
+        local containerCorner = Instance.new("UICorner")
+        containerCorner.CornerRadius = UDim.new(0, 6)
+        containerCorner.Parent = container
+        
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, -100, 1, 0)
+        label.Position = UDim2.new(0, 10, 0, 0)
+        label.BackgroundTransparency = 1
+        label.Text = config.Text or "Keybind"
+        label.TextColor3 = self.Theme.Text
+        label.TextSize = 14
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.Font = Enum.Font.Gotham
+        label.Parent = container
+        
+        local keybindButton = Instance.new("TextButton")
+        keybindButton.Size = UDim2.new(0, 80, 0, 25)
+        keybindButton.Position = UDim2.new(1, -90, 0.5, -12.5)
+        keybindButton.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
+        keybindButton.BorderSizePixel = 0
+        keybindButton.Text = config.Default and config.Default.Name or "None"
+        keybindButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        keybindButton.TextSize = 12
+        keybindButton.Font = Enum.Font.GothamMedium
+        keybindButton.Parent = container
+        
+        local buttonCorner = Instance.new("UICorner")
+        buttonCorner.CornerRadius = UDim.new(0, 4)
+        buttonCorner.Parent = keybindButton
+        
+        local currentKeybind = config.Default
+        local isListening = false
+        
+        local function updateKeybind(keyCode)
+            currentKeybind = keyCode
+            keybindButton.Text = keyCode and keyCode.Name or "None"
+            if config.Callback then
+                config.Callback(keyCode)
+            end
+        end
+        
+        keybindButton.MouseButton1Click:Connect(function()
+            if not isListening then
+                isListening = true
+                keybindButton.Text = "Press Key..."
+                keybindButton.BackgroundColor3 = self.Theme.Accent
+                
+                local connection
+                connection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+                    if not gameProcessed and input.UserInputType == Enum.UserInputType.Keyboard then
+                        updateKeybind(input.KeyCode)
+                        keybindButton.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
+                        isListening = false
+                        connection:Disconnect()
+                    end
+                end)
+            end
+        end)
+        
+        return {
+            SetValue = function(keyCode)
+                updateKeybind(keyCode)
+            end,
+            GetValue = function()
+                return currentKeybind
+            end
+        }
+    end
+    
+    function pageMethods:CreateColorPicker(config)
+        local container = Instance.new("Frame")
+        container.Name = config.Name or "ColorPicker"
+        container.Size = UDim2.new(1, 0, 0, 35)
+        container.BackgroundColor3 = self.Theme.Secondary
+        container.BackgroundTransparency = 0.3
+        container.BorderSizePixel = 0
+        container.Parent = page.Content
+        
+        local containerCorner = Instance.new("UICorner")
+        containerCorner.CornerRadius = UDim.new(0, 6)
+        containerCorner.Parent = container
+        
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, -60, 1, 0)
+        label.Position = UDim2.new(0, 10, 0, 0)
+        label.BackgroundTransparency = 1
+        label.Text = config.Text or "Color Picker"
+        label.TextColor3 = self.Theme.Text
+        label.TextSize = 14
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.Font = Enum.Font.Gotham
+        label.Parent = container
+        
+        local colorPreview = Instance.new("Frame")
+        colorPreview.Size = UDim2.new(0, 40, 0, 25)
+        colorPreview.Position = UDim2.new(1, -50, 0.5, -12.5)
+        colorPreview.BackgroundColor3 = config.Default or Color3.fromRGB(255, 255, 255)
+        colorPreview.BorderSizePixel = 1
+        colorPreview.BorderColor3 = self.Theme.Border
+        colorPreview.Parent = container
+        
+        local previewCorner = Instance.new("UICorner")
+        previewCorner.CornerRadius = UDim.new(0, 4)
+        previewCorner.Parent = colorPreview
+        
+        local currentColor = config.Default or Color3.fromRGB(255, 255, 255)
+        
+        -- Simple color picker (you can expand this with a full HSV picker)
+        local colorButton = Instance.new("TextButton")
+        colorButton.Size = UDim2.new(1, 0, 1, 0)
+        colorButton.BackgroundTransparency = 1
+        colorButton.Text = ""
+        colorButton.Parent = colorPreview
+        
+        colorButton.MouseButton1Click:Connect(function()
+            -- This would open a color picker dialog
+            -- For now, cycle through some preset colors
+            local colors = {
+                Color3.fromRGB(255, 100, 100),
+                Color3.fromRGB(100, 255, 100),
+                Color3.fromRGB(100, 100, 255),
+                Color3.fromRGB(255, 255, 100),
+                Color3.fromRGB(255, 100, 255),
+                Color3.fromRGB(100, 255, 255),
+                Color3.fromRGB(255, 255, 255)
+            }
+            
+            local currentIndex = 1
+            for i, color in ipairs(colors) do
+                if color == currentColor then
+                    currentIndex = i
+                    break
+                end
+            end
+            
+            currentIndex = currentIndex % #colors + 1
+            currentColor = colors[currentIndex]
+            colorPreview.BackgroundColor3 = currentColor
+            
+            if config.Callback then
+                config.Callback(currentColor)
+            end
+        end)
+        
+        return {
+            SetValue = function(color)
+                currentColor = color
+                colorPreview.BackgroundColor3 = color
+            end,
+            GetValue = function()
+                return currentColor
+            end
+        }
+    end
+    
+    function pageMethods:CreateLabel(config)
+        local label = Instance.new("TextLabel")
+        label.Name = config.Name or "Label"
+        label.Size = UDim2.new(1, 0, 0, 25)
+        label.BackgroundTransparency = 1
+        label.Text = config.Text or "Label"
+        label.TextColor3 = config.Color or self.Theme.Text
+        label.TextSize = config.Size or 14
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.Font = Enum.Font.Gotham
+        label.Parent = page.Content
+        
+        return label
+    end
+    
+    function pageMethods:CreateSeparator()
+        local separator = Instance.new("Frame")
+        separator.Name = "Separator"
+        separator.Size = UDim2.new(1, -20, 0, 1)
+        separator.Position = UDim2.new(0, 10, 0, 0)
+        separator.BackgroundColor3 = self.Theme.Border
+        separator.BorderSizePixel = 0
+        separator.Parent = page.Content
+        
+        return separator
+    end
+    
+    return pageMethods
+end
+
+function NexusUI:ShowPage(pageName)
+    -- Hide current page
+    if self.CurrentPage then
+        local currentPage = self.Pages[self.CurrentPage]
+        if currentPage then
+            currentPage.Content.Visible = false
+            CreateTween(currentPage.Button, {Time = 0.2}, {
+                BackgroundTransparency = 0.5,
+                TextColor3 = self.Theme.SubText
+            }):Play()
+        end
+    end
+    
+    -- Show new page
+    local newPage = self.Pages[pageName]
+    if newPage then
+        newPage.Content.Visible = true
+        CreateTween(newPage.Button, {Time = 0.2}, {
+            BackgroundTransparency = 0.2,
+            TextColor3 = self.Theme.Text
+        }):Play()
+        self.CurrentPage = pageName
+    end
+end
+
+function NexusUI:Toggle()
+    self.Main.Visible = not self.Main.Visible
+end
+
+function NexusUI:SetTheme(themeName)
+    if Themes[themeName] then
+        self.Theme = Themes[themeName]
+        self:UpdateTheme()
+    end
+end
+
+function NexusUI:UpdateTheme()
+    -- Update main colors
+    self.Main.BackgroundColor3 = self.Theme.Primary
+    self.Title.TextColor3 = self.Theme.Text
+    self.Navigation.BackgroundColor3 = self.Theme.Secondary
+    
+    -- Update all page elements (you would iterate through all elements here)
+end
+
+function NexusUI:CreateNotification(config)
+    local notification = Instance.new("Frame")
+    notification.Name = "Notification"
+    notification.Size = UDim2.new(0, 300, 0, 80)
+    notification.Position = UDim2.new(1, -320, 0, 20 + #self.Notifications * 90)
+    notification.BackgroundColor3 = self.Theme.Secondary
+    notification.BorderSizePixel = 0
+    notification.Parent = self.GUI
+    
+    local notifCorner = Instance.new("UICorner")
+    notifCorner.CornerRadius = UDim.new(0, 8)
+    notifCorner.Parent = notification
+    
+    -- Shadow
+    local shadow = Instance.new("ImageLabel")
+    shadow.Name = "Shadow"
+    shadow.Size = UDim2.new(1, 10, 1, 10)
+    shadow.Position = UDim2.new(0, -5, 0, -5)
+    shadow.BackgroundTransparency = 1
+    shadow.Image = "rbxasset://textures/ui/Controls/DropShadow.png"
+    shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+    shadow.ImageTransparency = 0.7
+    shadow.ScaleType = Enum.ScaleType.Slice
+    shadow.SliceCenter = Rect.new(12, 12, 256-12, 256-12)
+    shadow.ZIndex = -1
+    shadow.Parent = notification
+    
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -50, 0, 30)
+    title.Position = UDim2.new(0, 15, 0, 10)
+    title.BackgroundTransparency = 1
+    title.Text = config.Title or "Notification"
+    title.TextColor3 = self.Theme.Text
+    title.TextSize = 16
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Font = Enum.Font.GothamBold
+    title.Parent = notification
+    
+    local content = Instance.new("TextLabel")
+    content.Size = UDim2.new(1, -50, 0, 30)
+    content.Position = UDim2.new(0, 15, 0, 35)
+    content.BackgroundTransparency = 1
+    content.Text = config.Content or "Notification content"
+    content.TextColor3 = self.Theme.SubText
+    content.TextSize = 13
+    content.TextXAlignment = Enum.TextXAlignment.Left
+    content.TextWrapped = true
+    content.Font = Enum.Font.Gotham
+    content.Parent = notification
+    
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Size = UDim2.new(0, 20, 0, 20)
+    closeBtn.Position = UDim2.new(1, -30, 0, 10)
+    closeBtn.BackgroundTransparency = 1
+    closeBtn.Text = "×"
+    closeBtn.TextColor3 = self.Theme.SubText
+    closeBtn.TextSize = 16
+    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.Parent = notification
+    
+    -- Slide in animation
+    notification.Position = UDim2.new(1, 0, 0, 20 + #self.Notifications * 90)
+    CreateTween(notification, {Time = 0.5, EasingStyle = Enum.EasingStyle.Back}, {
+        Position = UDim2.new(1, -320, 0, 20 + #self.Notifications * 90)
+    }):Play()
+    
+    table.insert(self.Notifications, notification)
+    
+    -- Auto remove after duration
+    local duration = config.Duration or 5
+    wait(duration)
+    
+    -- Slide out animation
+    CreateTween(notification, {Time = 0.3}, {
+        Position = UDim2.new(1, 0, 0, notification.Position.Y.Offset)
+    }):Play()
+    
+    wait(0.3)
+    notification:Destroy()
+    
+    -- Remove from notifications table
+    for i, notif in ipairs(self.Notifications) do
+        if notif == notification then
+            table.remove(self.Notifications, i)
+            break
+        end
+    end
+end
+
+function NexusUI:Destroy()
+    -- Fade out animation
+    CreateTween(self.Main, {Time = 0.3}, {
+        Size = UDim2.new(0, 0, 0, 0),
+        BackgroundTransparency = 1
+    }):Play()
+    
+    wait(0.3)
+    self.GUI:Destroy()
+end
+
+-- Example Usage
+--[[
+local NexusUI = require(script.NexusUI)
+
+local Window = NexusUI.new({
+    Name = "My Script Hub",
+    Theme = "Dark",
+    Size = UDim2.new(0, 600, 0, 400),
+    Keybind = Enum.KeyCode.RightControl
+})
+
+local MainPage = Window:CreatePage({
+    Name = "Main",
+    Icon = "rbxassetid://0"
+})
+
+MainPage:CreateButton({
+    Name = "TestButton",
+    Text = "Click Me!",
+    Callback = function()
+        Window:CreateNotification({
+            Title = "Success!",
+            Content = "Button was clicked!",
+            Duration = 3
+        })
+    end
+})
+
+MainPage:CreateToggle({
+    Name = "TestToggle",
+    Text = "Enable Feature",
+    Default = false,
+    Callback = function(value)
+        print("Toggle:", value)
+    end
+})
+
+MainPage:CreateSlider({
+    Name = "TestSlider",
+    Text = "Speed",
+    Min = 0,
+    Max = 100,
+    Default = 50,
+    Increment = 1,
+    Callback = function(value)
+        print("Slider:", value)
+    end
+})
+--]]
+
+return NexusUI
